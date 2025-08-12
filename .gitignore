@@ -31,5 +31,9 @@ code/imgui.ini
 code/logs/
 code/saved_models/
 generator/data
+submodules/
 
 imgui.ini
+
+test.py 
+train.sh

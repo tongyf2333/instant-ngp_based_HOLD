@@ -1,9 +1,20 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import tinycudann as tcnn
 
 from ..engine.embedders import get_embedder
 
+def implicit_normalizer(x):
+    return (x+7.0)/14.0
+
+def compute_aabb(points: torch.Tensor):    
+    min_point, _ = points.min(dim=0)
+    max_point, _ = points.max(dim=0)
+    return min_point, max_point
+
+def assert_in_0_1(tensor: torch.Tensor):
+    assert torch.all((tensor >= 0) & (tensor <= 1)), "Tensor contains values outside [0, 1]"
 
 class ImplicitNet(nn.Module):
     def __init__(self, opt, args, body_specs):
@@ -13,6 +24,8 @@ class ImplicitNet(nn.Module):
         self.num_layers = len(dims)
         self.skip_in = opt.skip_in
         self.embedder_obj = None
+        self.hashencoder = None
+        self.normalizer = None
         self.opt = opt
         self.body_specs = body_specs
 
@@ -26,7 +39,27 @@ class ImplicitNet(nn.Module):
                 no_barf=args.no_barf,
             )
             self.embedder_obj = embedder_obj
+            #print(opt.nettype," channel: ",opt.d_in, "->", input_ch)
+            if opt.nettype == "object":
+                L = 16; F = 2; log2_T = 19; N_min = 16
+                b = np.exp(np.log(2048/N_min)/(L-1))
+                print(f'GridEncoding: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
+                self.normalizer = implicit_normalizer
+                self.hashencoder=tcnn.Encoding(
+                    n_input_dims=3,
+                    encoding_config={
+                        "otype": "HashGrid",
+                        "n_levels": L,
+                        "n_features_per_level": F,
+                        "log2_hashmap_size": log2_T,
+                        "base_resolution": N_min,
+                        "per_level_scale": b,
+                        "interpolation": "Linear"
+                    }
+                )
+                input_ch= self.hashencoder.n_output_dims
             dims[0] = input_ch
+
         self.cond = opt.cond
         if self.cond == "pose":
             self.cond_layer = [0]
@@ -111,7 +144,12 @@ class ImplicitNet(nn.Module):
                 input_cond = self.lin_p0(input_cond)
 
         if self.embedder_obj is not None:
-            input = self.embedder_obj.embed(input)
+            if self.normalizer is not None and self.hashencoder is not None:
+                input = self.normalizer(input)
+                #assert_in_0_1(input)
+                input = self.hashencoder(input)
+            else:
+                input = self.embedder_obj.embed(input)
 
         x = input
 

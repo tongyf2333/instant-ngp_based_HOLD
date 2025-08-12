@@ -14,6 +14,9 @@ class Background(nn.Module):
 
         # Background networks
         # Frame-dependent radiane
+        #print("Background d_in:", opt.bg_implicit_network.d_in)
+        opt.bg_implicit_network.nettype="bg"
+        opt.bg_rendering_network.nettype = "bg"
         self.bg_implicit_network = ImplicitNet(opt.bg_implicit_network, args, bg_specs)
         # NeRF++ rendering
         self.bg_rendering_network = RenderingNet(
