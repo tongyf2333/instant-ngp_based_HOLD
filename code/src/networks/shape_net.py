@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import tinycudann as tcnn
 
-from ..engine.embedders import get_embedder
+from ..engine.embedders import get_embedder,ProgressiveHashGrid
 
 def implicit_normalizer(x):
     return (x+7.0)/14.0
@@ -20,44 +20,46 @@ class ImplicitNet(nn.Module):
     def __init__(self, opt, args, body_specs):
         super().__init__()
 
-        dims = [opt.d_in] + list(opt.dims) + [opt.d_out + opt.feature_vector_size]
+        if opt.nettype == "object":
+            opt.dims=[64,64]
+            self.feat_size=64
+        else :
+            self.feat_size=opt.feature_vector_size
+        dims = [opt.d_in] + list(opt.dims) + [opt.d_out + self.feat_size]
         self.num_layers = len(dims)
         self.skip_in = opt.skip_in
         self.embedder_obj = None
-        self.hashencoder = None
-        self.normalizer = None
         self.opt = opt
         self.body_specs = body_specs
 
+        if opt.nettype == "object":
+            self.skip_in=[]
+            self.obj=True
+        else :
+            self.obj=False
+
         if opt.multires > 0:
-            embedder_obj, input_ch = get_embedder(
-                opt.multires,
-                input_dims=opt.d_in,
-                mode=body_specs.embedding,
-                barf_s=args.barf_s,
-                barf_e=args.barf_e,
-                no_barf=args.no_barf,
-            )
-            self.embedder_obj = embedder_obj
-            #print(opt.nettype," channel: ",opt.d_in, "->", input_ch)
             if opt.nettype == "object":
-                L = 16; F = 2; log2_T = 19; N_min = 16
-                b = np.exp(np.log(2048/N_min)/(L-1))
-                print(f'GridEncoding: Nmin={N_min} b={b:.5f} F={F} T=2^{log2_T} L={L}')
-                self.normalizer = implicit_normalizer
-                self.hashencoder=tcnn.Encoding(
-                    n_input_dims=3,
-                    encoding_config={
-                        "otype": "HashGrid",
-                        "n_levels": L,
-                        "n_features_per_level": F,
-                        "log2_hashmap_size": log2_T,
-                        "base_resolution": N_min,
-                        "per_level_scale": b,
-                        "interpolation": "Linear"
-                    }
+                embedder_obj=ProgressiveHashGrid(
+                    input_dims=3,
+                    log2_hashmap_size=19,
+                    base_resolution=16,
+                    n_levels=16,
+                    n_features_per_level=2,
+                    max_resolution=2048,
+                    start_level=4,
                 )
-                input_ch= self.hashencoder.n_output_dims
+                input_ch=embedder_obj.out_dim
+            else :
+                embedder_obj, input_ch = get_embedder(
+                    opt.multires,
+                    input_dims=opt.d_in,
+                    mode=body_specs.embedding,
+                    barf_s=args.barf_s,
+                    barf_e=args.barf_e,
+                    no_barf=args.no_barf,
+                )
+            self.embedder_obj = embedder_obj
             dims[0] = input_ch
 
         self.cond = opt.cond
@@ -124,7 +126,7 @@ class ImplicitNet(nn.Module):
 
         input = input.reshape(num_batch * num_point, num_dim)
 
-        if self.cond != "none":
+        if self.cond != "none" and self.obj==False :
             num_batch, num_cond = cond[self.cond].shape
             try:
                 input_cond = (
@@ -144,21 +146,18 @@ class ImplicitNet(nn.Module):
                 input_cond = self.lin_p0(input_cond)
 
         if self.embedder_obj is not None:
-            if self.normalizer is not None and self.hashencoder is not None:
-                input = self.normalizer(input)
-                #assert_in_0_1(input)
-                input = self.hashencoder(input)
-            else:
-                input = self.embedder_obj.embed(input)
+            input = self.embedder_obj.embed(input)
+            input=input.to(torch.float32)
 
         x = input
 
         for l in range(0, self.num_layers - 1):
             lin = getattr(self, "lin" + str(l))
-            if self.cond != "none" and l in self.cond_layer:
-                x = torch.cat([x, input_cond], dim=-1)
-            if l in self.skip_in:
-                x = torch.cat([x, input], 1) / np.sqrt(2)
+            if self.obj==False:
+                if self.cond != "none" and l in self.cond_layer:
+                    x = torch.cat([x, input_cond], dim=-1)
+                if l in self.skip_in:
+                    x = torch.cat([x, input], 1) / np.sqrt(2)
             x = lin(x)
             if l < self.num_layers - 2:
                 x = self.softplus(x)

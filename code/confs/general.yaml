@@ -79,7 +79,7 @@ model:
 dataset:
   train:
     type: train
-    batch_size: 5
+    batch_size: 1
     drop_last: false
     shuffle: true
   valid:

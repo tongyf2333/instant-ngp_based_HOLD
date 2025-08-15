@@ -1,6 +1,8 @@
 import torch
 import math
 import torch.nn as nn
+import tinycudann as tcnn
+import numpy as np
 
 
 # Positional encoding embedding. Code was taken from https://github.com/bmild/nerf.
@@ -123,6 +125,53 @@ class BarfEmbedder(Embedder):
 
     def eval(self):
         self.no_barf = True
+
+class ProgressiveHashGrid(Embedder):
+    def __init__(self,input_dims,log2_hashmap_size=19,base_resolution=32,n_levels=16,n_features_per_level=2,max_resolution=2048,start_level=4):
+        super().__init__(
+            input_dims, n_levels, include_input=False, log_sampling=False
+        )
+        b = np.exp(np.log(max_resolution/base_resolution)/(n_levels-1))
+        self.hashencoder = tcnn.Encoding(
+            n_input_dims=input_dims,
+            encoding_config={
+                "otype": "HashGrid",
+                "n_levels": n_levels,
+                "n_features_per_level": n_features_per_level,
+                "log2_hashmap_size": log2_hashmap_size,
+                "base_resolution": base_resolution,
+                "per_level_scale": b,
+                "interpolation": "Linear"
+            }
+        )
+        self.out_dim = self.hashencoder.n_output_dims
+        self.n_level= n_levels
+        self.n_features_per_level = n_features_per_level
+        self.current_level = start_level
+        self.total_iter=0
+        self.mask = torch.zeros(self.n_level * self.n_features_per_level, dtype=torch.float32, device="cuda",requires_grad=False)
+
+    def eval(self):
+        pass
+
+    def step(self):
+        """self.total_iter = self.total_iter + 1
+        if self.total_iter % 400 == 0:
+            self.current_level = min(self.current_level + 1, self.n_level)
+            mask_clone = self.mask.clone()
+            mask_clone[:self.current_level * self.n_features_per_level] = 1
+            self.mask = mask_clone"""
+        pass
+
+
+    def normalizer(self, inputs):
+        return (inputs+7.0)/14.0
+
+    def embed(self, inputs):
+        inputs = self.normalizer(inputs)
+        encoded_x = self.hashencoder(inputs)
+        #return encoded_x*self.mask
+        return encoded_x
 
 
 def get_embedder(multires, mode, input_dims=3, barf_s=None, barf_e=None, no_barf=False):

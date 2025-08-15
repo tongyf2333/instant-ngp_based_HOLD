@@ -1,6 +1,7 @@
 from pprint import pprint
 import os
 import os.path as op
+import time
 
 import numpy as np
 import pytorch_lightning as pl
@@ -34,6 +35,7 @@ def main():
         log_every_n_steps=args.log_every,
         num_sanity_val_steps=0,
         logger=False,
+        #precision=16,
     )
 
     pprint(args)
@@ -76,4 +78,6 @@ def main():
 
 
 if __name__ == "__main__":
+    start = time.perf_counter()
     main()
+    print(f"total time :{time.perf_counter() - start:.4f} seconds")

@@ -78,14 +78,14 @@ def output2images(outputs, img_size):
     pred_imap = aggregate_reshape(outputs["instance_map"], img_size)
     pred_rgb = aggregate_reshape(outputs["rgb"], img_size)
     gt_rgb = aggregate_reshape(outputs["gt.rgb"], img_size)
-    bg_rgb = aggregate_reshape(outputs["bg_rgb_only"], img_size)
+    #bg_rgb = aggregate_reshape(outputs["bg_rgb_only"], img_size)
     out.overwrite("normal", make_normal_transparent(pred_imap.squeeze(), out["normal"]))
 
     pred_imap = segm_pred_to_cmap(pred_imap.squeeze())
 
     pred_rgb = scale_to_image(pred_rgb)
     gt_rgb = scale_to_image(gt_rgb)
-    bg_rgb = scale_to_image(bg_rgb)
+    #bg_rgb = scale_to_image(bg_rgb)
 
     # concat PIL images horizontally
     rgb = Image.new("RGB", (gt_rgb.width + pred_rgb.width, gt_rgb.height))
@@ -94,7 +94,7 @@ def output2images(outputs, img_size):
 
     out["rgb"] = rgb
     out["imap"] = scale_to_image(pred_imap)
-    out["bg_rgb"] = bg_rgb
+    #out["bg_rgb"] = bg_rgb
     return out
 
 

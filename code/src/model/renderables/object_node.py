@@ -30,9 +30,10 @@ class ObjectNode(Node):
             node_id,
         )
         params.load_params(args.case)
-        #print("object d_in:",opt.implicit_network.d_in)
         opt.implicit_network.nettype = "object"
         opt.rendering_network.nettype = "object"
+        #opt.implicit_network.nettype = "mano"
+        #opt.rendering_network.nettype = "mano"
         super(ObjectNode, self).__init__(
             args,
             opt,

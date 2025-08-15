@@ -9,7 +9,12 @@ class RenderingNet(nn.Module):
         super().__init__()
 
         self.mode = opt.mode
-        dims = [opt.d_in + opt.feature_vector_size] + list(opt.dims) + [opt.d_out]
+        if opt.nettype== "object":
+            opt.dims = [64, 64]
+            self.feat_size=64
+        else :
+            self.feat_size=opt.feature_vector_size
+        dims = [opt.d_in + self.feat_size] + list(opt.dims) + [opt.d_out]
 
         self.body_specs = body_specs
 

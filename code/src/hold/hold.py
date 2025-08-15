@@ -193,7 +193,7 @@ class HOLD(pl.LightningModule):
                 vis_dict = {}
                 vis_dict["rgb"] = out["rgb"]
                 vis_dict["instance_map"] = out["instance_map"]
-                vis_dict["bg_rgb_only"] = out["bg_rgb_only"]
+                #vis_dict["bg_rgb_only"] = out["bg_rgb_only"]
                 vis_dict.update(out.search("fg_rgb.vis"))
                 vis_dict.update(out.search("mask_prob"))
                 vis_dict.update(out.search("normal"))
